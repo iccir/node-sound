@@ -86,7 +86,7 @@ typedef struct queueStruct {
 };
 static queueStruct* callbacksQueue= NULL;
 static queueStruct* renderJobsQueue= NULL;
-static ev_async eio_sound_async_notifier;
+static uv_async_t uio_sound_async_notifier;
 pthread_mutex_t callbacksQueue_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t renderJobsQueue_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -320,7 +320,7 @@ v8::Handle<Value> Loop (const Arguments &args) {
     loop= args[0]->NumberValue();
     
     if (loop < 0) loop= 0;
-    else if (loop > 9007199254740992) loop= 9007199254740992; // 2^53
+    else if (loop > 9007199254740992.0) loop= 9007199254740992.0; // 2^53
     
     player->loop= truncl(loop);
   }
@@ -384,7 +384,7 @@ v8::Handle<Value> Play (const Arguments &args) {
     
     err= AudioQueueStart(player->AQ, NULL);
     if (err) {
-      fprintf(stderr, " ERROR:AudioQueueStart:[%d]", err);
+      fprintf(stderr, " ERROR:AudioQueueStart:[%ld]", (long)err);
     }
     
     goto end;
@@ -401,18 +401,18 @@ v8::Handle<Value> Play (const Arguments &args) {
   player->AQBuffer1->mAudioDataByteSize= player->AQBuffer1Length;
   err= AudioQueueEnqueueBuffer(player->AQ, player->AQBuffer1, 0, NULL);
   if (err) {
-    fprintf(stderr, " ERROR:AudioQueueEnqueueBuffer:[%d]", err);
+    fprintf(stderr, " ERROR:AudioQueueEnqueueBuffer:[%ld]", (long)err);
   }
   
   player->AQBuffer2->mAudioDataByteSize= player->AQBuffer2Length;
   err= AudioQueueEnqueueBuffer(player->AQ, player->AQBuffer2, 0, NULL);
   if (err) {
-    fprintf(stderr, " ERROR:AudioQueueEnqueueBuffer:[%d]", err);
+    fprintf(stderr, " ERROR:AudioQueueEnqueueBuffer:[%ld]", (long)err);
   }
   
   err= AudioQueueStart(player->AQ, NULL);
   if (err) {
-    fprintf(stderr, " ERROR:AudioQueueStart:[%d]", err);
+    fprintf(stderr, " ERROR:AudioQueueStart:[%ld]", (long)err);
   }
   
 #else
@@ -479,7 +479,7 @@ void AQBufferCallback (void* priv, AudioQueueRef AQ, AudioQueueBufferRef AQBuffe
 
     err= AudioQueueEnqueueBuffer(player->AQ, AQBuffer, 0, NULL);
     if (err) {
-      fprintf(stderr, " ERROR:AQBufferCallback AudioQueueEnqueueBuffer:[%d] ", err);
+      fprintf(stderr, " ERROR:AQBufferCallback AudioQueueEnqueueBuffer:[%ld] ", (long)err);
     }
     
   }
@@ -489,7 +489,7 @@ void AQBufferCallback (void* priv, AudioQueueRef AQ, AudioQueueBufferRef AQBuffe
     
     err= AudioQueueStop(player->AQ, true);
     if (err) {
-      fprintf(stderr, " ERROR:AudioQueueStop:[%d]", err);
+      fprintf(stderr, " ERROR:AudioQueueStop:[%ld]", (long)err);
     }
     
     player->playing= 0;
@@ -506,7 +506,7 @@ void AQBufferCallback (void* priv, AudioQueueRef AQ, AudioQueueBufferRef AQBuffe
       callbacksQueue->last= theItem;
       pthread_mutex_unlock(&callbacksQueue_mutex);
       
-      if (!ev_async_pending(&eio_sound_async_notifier)) ev_async_send(EV_DEFAULT_UC_ &eio_sound_async_notifier);
+      uv_async_send(&uio_sound_async_notifier);
     }
   }
   else {
@@ -517,7 +517,7 @@ void AQBufferCallback (void* priv, AudioQueueRef AQ, AudioQueueBufferRef AQBuffe
     
     err= AudioQueueStop(player->AQ, false);
     if (err) {
-      fprintf(stderr, " ERROR:AudioQueueStop:[%d]", err);
+      fprintf(stderr, " ERROR:AudioQueueStop:[%ld]", (long)err);
     }
   }
   
@@ -567,7 +567,7 @@ v8::Handle<Value> Pause (const Arguments &args) {
   tracker(-1);
   err= AudioQueuePause(player->AQ);
   if (err) {
-    fprintf(stderr, " ERROR:AudioQueuePause:[%d]", err);
+    fprintf(stderr, " ERROR:AudioQueuePause:[%ld]", (long)err);
   }
 
 #else
@@ -712,7 +712,7 @@ v8::Handle<Value> Create (const Arguments &args) {
   if (err) {
     free(player);
     V8::AdjustAmountOfExternalAllocatedMemory((int) -sizeof(playerStruct));
-    fprintf(stderr, "\nERROR *** Sound::create AudioQueueNewOutput:[%d]\n", err);
+    fprintf(stderr, "\nERROR *** Sound::create AudioQueueNewOutput:[%ld]\n", (long)err);
     return ThrowException(Exception::TypeError(String::New("Sound::create(buffer) AudioQueueNewOutput error")));
   }
   
@@ -731,7 +731,7 @@ v8::Handle<Value> Create (const Arguments &args) {
     AudioQueueDispose (player->AQ, true);
     free(player);
     V8::AdjustAmountOfExternalAllocatedMemory((int) -sizeof(playerStruct));
-    fprintf(stderr, "\nERROR *** Sound::create AudioQueueAllocateBuffer:[%d]\n", err);
+    fprintf(stderr, "\nERROR *** Sound::create AudioQueueAllocateBuffer:[%ld]\n", (long)err);
     return ThrowException(Exception::TypeError(String::New("Sound::create(buffer) AudioQueueAllocateBuffer error")));
   }
   
@@ -745,7 +745,7 @@ v8::Handle<Value> Create (const Arguments &args) {
     AudioQueueDispose (player->AQ, true);
     free(player);
     V8::AdjustAmountOfExternalAllocatedMemory((int) -sizeof(playerStruct));
-    fprintf(stderr, "\nERROR *** Sound::create AudioQueueAllocateBuffer:[%d]\n", err);
+    fprintf(stderr, "\nERROR *** Sound::create AudioQueueAllocateBuffer:[%ld]\n", (long)err);
     return ThrowException(Exception::TypeError(String::New("Sound::create(buffer) AudioQueueAllocateBuffer error")));
   }
   
@@ -814,7 +814,7 @@ void renderSound (renderJob* job) {
   
   err= ExtAudioFileOpenURL(pathURL, &inputAudioFile);
   if (err) {
-    fprintf(stderr, "\nERROR ExtAudioFileOpenURL [%d]", err);
+    fprintf(stderr, "\nERROR ExtAudioFileOpenURL [%ld]", (long)err);
     goto end1;
   }
   
@@ -822,7 +822,7 @@ void renderSound (renderJob* job) {
   macBoolean writable;
   err= ExtAudioFileGetPropertyInfo(inputAudioFile, kExtAudioFileProperty_FileDataFormat, &size, &writable);
   if (err) {
-    fprintf(stderr, "\nERROR ExtAudioFileGetPropertyInfo [%d]", err);
+    fprintf(stderr, "\nERROR ExtAudioFileGetPropertyInfo [%ld]", (long)err);
     goto end2;
   }
   
@@ -830,7 +830,7 @@ void renderSound (renderJob* job) {
   inputFormat= (AudioStreamBasicDescription*) malloc(size);
   err= ExtAudioFileGetProperty(inputAudioFile, kExtAudioFileProperty_FileDataFormat, &size, inputFormat);
   if (err) {
-    fprintf(stderr, "\nERROR ExtAudioFileGetProperty [%d]", err);
+    fprintf(stderr, "\nERROR ExtAudioFileGetProperty [%ld]", (long)err);
     goto end3;
   }
   /*
@@ -847,7 +847,7 @@ void renderSound (renderJob* job) {
   
   err= ExtAudioFileSetProperty(inputAudioFile, kExtAudioFileProperty_ClientDataFormat, size, &gFormato);
   if (err) {
-    fprintf(stderr, "\nERROR ExtAudioFileSetProperty [%d]", err);
+    fprintf(stderr, "\nERROR ExtAudioFileSetProperty [%ld]", (long)err);
     goto end3;
   }
   
@@ -870,7 +870,7 @@ void renderSound (renderJob* job) {
   
     err= ExtAudioFileRead (inputAudioFile, &frames, &bufferList);
     if (err) {
-      fprintf(stderr, "\nERROR ExtAudioFileRead [%d]", err);
+      fprintf(stderr, "\nERROR ExtAudioFileRead [%ld]", (long)err);
       goto end3;
     }
   
@@ -889,7 +889,7 @@ void renderSound (renderJob* job) {
   end2:
   err= ExtAudioFileDispose(inputAudioFile);
   if (err) {
-    fprintf(stderr, "\nERROR ExtAudioFileDispose [%d]", err);
+    fprintf(stderr, "\nERROR ExtAudioFileDispose [%ld]", (long)err);
   }
   
   end1:
@@ -1011,8 +1011,8 @@ void* renderThread (void* ptr) {
       callbacksQueue->last= qitem;
     pthread_mutex_unlock(&callbacksQueue_mutex);
   
-    if (!ev_async_pending(&eio_sound_async_notifier)) ev_async_send(EV_DEFAULT_UC_ &eio_sound_async_notifier);
-  
+    uv_async_send(&uio_sound_async_notifier);
+
     RUN= 0;
     pthread_mutex_lock(&renderJobsQueue_mutex);
       renderJobsQueue= destroyQueueItem(renderJobsQueue);
@@ -1092,15 +1092,15 @@ v8::Handle<Value> Bufferify (const Arguments &args) {
 // ===================================
 
 // this is the async libev event callback that runs in node.js main thread
-static void Callback (EV_P_ ev_async *watcher, int revents) {
+static void Callback (uv_async_t *watcher, int revents) {
   
   //fprintf(stderr, "*** JSCallback");
   //fflush(stderr);
   
   HandleScope scope;
 
-  assert(watcher == &eio_sound_async_notifier);
-  assert(revents == EV_ASYNC);
+  assert(watcher == &uio_sound_async_notifier);
+  assert(revents == 0);
   
   renderJob* job;
   queueStruct* qitem;
@@ -1205,10 +1205,8 @@ extern "C" {
     target->Set(String::New("bufferifySync"), v8::Persistent<Function>::New(FunctionTemplate::New(BufferifySync)->GetFunction()));
     
     // Start async events for callbacks.
-    ev_async_init(&eio_sound_async_notifier, Callback);
-    ev_async_start(EV_DEFAULT_UC_ &eio_sound_async_notifier);
-    ev_unref(EV_DEFAULT_UC);
-    
+    uv_async_init(uv_default_loop(), &uio_sound_async_notifier, Callback);
+
 #if defined (__APPLE__)
     gFormato.mSampleRate= 44100;
     gFormato.mFormatID= kAudioFormatLinearPCM;
@@ -1239,7 +1237,7 @@ extern "C" {
     
     err= AudioQueueStart(fondoSnd->AQ, NULL);
     if (err) {
-      fprintf(stderr, "\nERROR *** Sound::Init AudioQueueStart:[%d]\n", err);
+      fprintf(stderr, "\nERROR *** Sound::Init AudioQueueStart:[%ld]\n", (long)err);
     }
     
 #endif
